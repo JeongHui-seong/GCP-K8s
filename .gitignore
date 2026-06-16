@@ -1,0 +1,27 @@
+
+# 테라폼 로컬 실행 및 플러그인 디렉토리 (용량이 큼. terraform init하면 다시 받을 수 있음)
+.terraform/
+
+# 로그 및 락 파일
+.terraform.lock.hcl
+
+# 인프라 현재 상태 및 백업 파일
+*.tfstate
+*.tfstate.*
+
+# 사용자 변수 정의 파일
+*.tfvars
+*.tfvars.json
+
+# 특정 환경용 변수 파일들도 예외 처리
+*.vars
+
+# 테라폼 실행 중 생성되는 임시 파일 및 크래시 로그
+crash.log
+crash.*.log
+*.tfplan
+
+# OS 및 에디터 임시 파일 (선택적 추가)
+.DS_Store
+.idea/
+.vscode/
