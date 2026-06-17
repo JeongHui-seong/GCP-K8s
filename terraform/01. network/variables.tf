@@ -24,3 +24,8 @@ variable "private_cidr" {
   type = string
   default = "10.0.1.0/24"
 }
+
+variable "k8s_tag" {
+  type = string
+  default = "k8s-cluster"
+}

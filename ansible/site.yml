@@ -1,0 +1,6 @@
+---
+- name: k8s 노드 공통 설정
+  hosts: k8s_cluster
+  become: true
+  roles:
+    - common

@@ -1,0 +1,38 @@
+---
+- name: 필수 의존성 및 시간 동기화 패키지 설치
+  ansible.builtin.dnf:
+    name:
+      - yum-utils
+      - device-mapper-persistent-data
+      - lvm2
+      - chrony
+      - tar
+    state: present
+
+- name: 시간 동기화 서비스 활성화
+  ansible.builtin.systemd:
+    name: chronyd
+    state: started
+    enabled: yes
+
+- name: SELinux 상태 변경
+  ansible.posix.selinux:
+    policy: targeted
+    state: permissive
+
+- name: OS 내부 방화벽 비활성화
+  ansible.builtin.systemd:
+    name: firewalld
+    state: stopped
+    enabled: no
+  failed_when: false
+
+- name: Swap 메모리 비활성화
+  ansible.builtin.command: swapoff -a
+  changed_when: false
+
+- name: Swap 마운트 영구 제거
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*?\sswap\s.*)'
+    replace: '# \1'

@@ -1,0 +1,11 @@
+---
+# containerd, kubelet 재시작 핸들러
+- name: restart containerd
+  ansible.builtin.systemd:
+    name: containerd
+    state: restarted
+
+- name: restart kubelet
+  ansible.builtin.systemd:
+    name: kubelet
+    state: restarted

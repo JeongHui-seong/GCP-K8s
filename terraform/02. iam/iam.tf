@@ -46,8 +46,15 @@ resource "google_project_iam_member" "monitoring_vm_sa_monitoring_viewer" {
 }
 
 # IAP SSH 터널링 접속 권한 부여
-resource "google_project_iam_member" "monitoring_vm_sa_iap_tunnel_user" {
+resource "google_project_iam_member" "user_iap_tunnel_accessor" {
   project = var.gcp_project_id
   role    = "roles/iap.tunnelResourceAccessor"
   member  = "user:${var.iap_ssh_user_email}"
+}
+
+# 앤서블 구글 IAP 플러그인이 내부 IP와 인스턴스명을 매핑할 수 있도록 메타데이터 조회 권한 부여
+resource "google_project_iam_member" "user_compute_viewer" {
+  project = var.gcp_project_id
+  role = "roles/compute.viewer"
+  member = "user:${var.iap_ssh_user_email}"
 }

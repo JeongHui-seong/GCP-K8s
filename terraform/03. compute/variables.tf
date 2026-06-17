@@ -31,3 +31,8 @@ variable "boot_image" {
   default = "rocky-linux-cloud/rocky-linux-9"
   description = "Boot image for compute instances"
 }
+
+variable "k8s_tag" {
+  type = string
+  default = "k8s-cluster"
+}

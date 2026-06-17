@@ -4,6 +4,8 @@ resource "google_compute_instance" "k8s_master" {
     machine_type = var.machine_type
     zone = var.gcp_zone
 
+    tags = [ var.k8s_tag ]
+
     boot_disk {
         initialize_params {
             image = var.boot_image
@@ -28,6 +30,8 @@ resource "google_compute_instance" "k8s_workers" {
     machine_type = var.machine_type
     zone = var.gcp_zone
 
+    tags = [ var.k8s_tag ]
+
     boot_disk {
         initialize_params {
             image = var.boot_image
@@ -50,6 +54,8 @@ resource "google_compute_instance" "monitoring_vm" {
     name = "${var.prefix}-monitoring"
     machine_type = var.machine_type
     zone = var.gcp_zone
+
+    tags = [ var.k8s_tag ]
 
     boot_disk {
         initialize_params {

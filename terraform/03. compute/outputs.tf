@@ -1,16 +1,20 @@
-# 현 디렉토리 위치 기준으로 ansible용 host 파일 생성
 resource "local_file" "ansible_inventory_file" {
-  filename = "${path.module}/../ansible/hosts.ini"
+  filename = "${path.module}/../../ansible/hosts.ini"
   content  = <<EOF
+[all:vars]
+ansible_user = jgmltjd99
+gcp_project = ${var.gcp_project_id}
+gcp_zone = ${var.gcp_zone}
+
 [k8s_master]
-k8s-master ansible_host=${google_compute_instance.k8s_master.network_interface[0].network_ip}
+${google_compute_instance.k8s_master.name} ansible_host=${google_compute_instance.k8s_master.name}
 
 [k8s_workers]
-%{ for idx, vm in google_compute_instance.k8s_workers ~}
-k8s-worker-${idx + 1} ansible_host=${vm.network_interface[0].network_ip}
+%{ for vm in google_compute_instance.k8s_workers ~}
+${vm.name} ansible_host=${vm.name}
 %{ endfor ~}
 
 [monitoring]
-monitoring-vm ansible_host=${google_compute_instance.monitoring_vm.network_interface[0].network_ip}
+${google_compute_instance.monitoring_vm.name} ansible_host=${google_compute_instance.monitoring_vm.name}
 EOF
 }

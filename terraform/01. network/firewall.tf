@@ -27,6 +27,8 @@ resource "google_compute_firewall" "allow_iap_ssh" {
     ports = [ "22" ]
   }
   source_ranges = [ "35.235.240.0/20" ] # 구글 IAP 공인 IP 대역
+
+  target_tags = [ var.k8s_tag ]
 }
 
 # 외부 로드밸런서 및 Grafana 진입 허용 방화벽

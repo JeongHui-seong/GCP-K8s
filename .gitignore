@@ -1,4 +1,3 @@
-
 # 테라폼 로컬 실행 및 플러그인 디렉토리 (용량이 큼. terraform init하면 다시 받을 수 있음)
 .terraform/
 
@@ -20,6 +19,21 @@
 crash.log
 crash.*.log
 *.tfplan
+
+# ansible host용 파일
+hosts.ini
+
+# 앤서블 실행 시 생성되는 임시 파일 및 로그
+*.log
+*.retry
+
+# 키 파일
+*.key
+*.pem
+id_rsa*
+
+# 앤서블 갤럭시로 다운로드한 외부 role (용량이 큼)
+roles/external_roles/
 
 # OS 및 에디터 임시 파일 (선택적 추가)
 .DS_Store

@@ -1,0 +1,37 @@
+---
+- name: K8s community-owned 패키지 repo 등록
+  ansible.builtin.yum_repository:
+    name: kubernetes
+    description: K8s Repository
+    baseurl: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/rpm/"
+    gpgkey: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/rpm/repodata/repomd.xml.key"
+    enabled: yes
+    gpgcheck: yes
+    exclude: "kubelet kubeadm kubectl cri-tools kubernetes-cni"
+
+- name: K8s 주요 컴포넌트 특정 버전 고정 설치
+  ansible.builtin.dnf:
+    name:
+      - "kubeadm-{{ k8s_package_version }}"
+      - "kubelet-{{ k8s_package_version }}"
+      - "kubectl-{{ k8s_package_version }}"
+    state: present
+    disable_excludes: kubernetes
+
+- name: Kubelet 시스템 데몬 활성화
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: yes
+
+- name: 설치 검증 테스트
+  ansible.builtin.command: "{{ item }}"
+  loop:
+    - "kubeadm version"
+    - "kubectl version --client"
+  changed_when: false
+  register: k8s_verify_output
+
+- name: 검증 결과 출력 로그 확인
+  ansible.builtin.debug:
+    msg: "{{ item.stdout }}"
+  loop: "{{ k8s_verify_output.results }}"
