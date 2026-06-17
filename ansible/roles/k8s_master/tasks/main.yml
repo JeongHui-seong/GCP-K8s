@@ -1,0 +1,36 @@
+---
+- name: 쿠버네티스 마스터 노드 초기화 (Calico CIDR 반영)
+  ansible.builtin.command: "kubeadm init --pod-network-cidr={{ k8s_pod_network_cidr }}"
+  register: init_output
+  changed_when: true
+  args:
+    creates: /etc/kubernetes/admin.conf
+
+- name: 일반 사용자를 위한 kubeconfig 폴더 생성
+  ansible.builtin.file:
+    path: "/home/{{ ansible_user }}/.kube"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+
+- name: admin.conf 설정 파일을 사용자 폴더로 복사 및 권한 부여
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "/home/{{ ansible_user }}/.kube/config"
+    remote_src: yes
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0600'
+
+- name: 워커 노드가 부트스트랩할 'kubeadm join' 명령어 추출
+  ansible.builtin.command: "kubeadm token create --print-join-command"
+  register: join_command
+  changed_when: false
+
+- name: 추출한 조인 명령어를 팩트로 등록
+  ansible.builtin.set_fact:
+    k8s_join_command: "{{ join_command.stdout }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+  loop: "{{ groups['k8s_cluster'] }}"

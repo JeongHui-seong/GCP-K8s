@@ -1,0 +1,30 @@
+---
+- name: Calico CNI 오퍼레이터 매니페스트 다운로드 및 배포
+  ansible.builtin.command: "kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/tigera-operator.yaml"
+  # become=true로 root 권한을 가지는데 root 홈 디렉토리에는 k8s config 파일이 없기 때문에 원본 config를 바라보도록 설정
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: calico_operator
+  changed_when: "'created' in calico_operator.stdout"
+  failed_when:
+    - calico_operator.rc != 0
+    - "'AlreadyExists' not in calico_operator.stderr"
+
+- name: Calico 커스텀 리소스(CRD) 템플릿 다운로드
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/custom-resources.yaml
+    dest: "/home/{{ ansible_user }}/custom-resources.yaml"
+    mode: '0644'
+
+- name: 매니페스트 파일의 Pod CIDR 대역 설정
+  ansible.builtin.replace:
+    path: "/home/{{ ansible_user }}/custom-resources.yaml"
+    regexp: 'cidr: 192\.168\.0\.0/16'
+    replace: "cidr: {{ k8s_pod_network_cidr }}"
+
+- name: 수정된 CRD 배포하여 Calico 구동
+  ansible.builtin.command: "kubectl apply -f /home/{{ ansible_user }}/custom-resources.yaml"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: calico_cr
+  changed_when: "'created' in calico_cr.stdout or 'configured' in calico_cr.stdout"

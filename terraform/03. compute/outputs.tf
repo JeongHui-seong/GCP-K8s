@@ -16,5 +16,9 @@ ${vm.name} ansible_host=${vm.name}
 
 [monitoring]
 ${google_compute_instance.monitoring_vm.name} ansible_host=${google_compute_instance.monitoring_vm.name}
+
+[k8s_cluster:children]
+k8s_master
+k8s_workers
 EOF
 }

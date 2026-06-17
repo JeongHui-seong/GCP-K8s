@@ -4,3 +4,21 @@
   become: true
   roles:
     - common
+
+- name: k8s 마스터 노드 초기화
+  hosts: k8s_master
+  become: true
+  roles:
+    - k8s_master
+
+- name: k8s 워커 노드 클러스터 조인
+  hosts: k8s_workers
+  become: true
+  roles:
+    - k8s_worker
+
+- name: Calico 네트워크 플러그인 배포
+  hosts: k8s_master
+  become: true
+  roles:
+    - k8s_network

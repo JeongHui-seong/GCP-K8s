@@ -1,0 +1,11 @@
+---
+- name: 쿠버네티스 클러스터 조인 확인
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+- name: k8s_master에서 전달받은 토큰 명령어로 클러스터 자동 join
+  ansible.builtin.command: "{{ k8s_join_command }}"
+  when: not kubelet_conf.stat.exists
+  register: join_result
+  changed_when: "'This node has joined the cluster' in join_result.stdout"

@@ -26,6 +26,7 @@ hosts.ini
 # 앤서블 실행 시 생성되는 임시 파일 및 로그
 *.log
 *.retry
+.ansible_cache/
 
 # 키 파일
 *.key
