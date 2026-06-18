@@ -65,3 +65,34 @@ resource "google_project_iam_member" "user_compute_viewer" {
   role = "roles/compute.viewer"
   member = "user:${var.iap_ssh_user_email}"
 }
+
+# 쿠버네티스 클라우드 컨트롤러 전용 서비스 계정 생성
+resource "google_service_account" "k8s_ccm_sa" {
+  account_id   = "${var.prefix}-cloud-controller-manager"
+  display_name = "Kubernetes Cloud Controller Manager Service Account"
+}
+
+# 네트워크 관리자 (로드밸런서 및 방화벽 제어)
+resource "google_project_iam_member" "ccm_network_admin" {
+  project = var.gcp_project_id
+  role    = "roles/compute.networkAdmin"
+  member  = "serviceAccount:${google_service_account.k8s_ccm_sa.email}"
+}
+
+# 컴퓨트 인스턴스 관리자 (워커 노드 인스턴스 정보 조회)
+resource "google_project_iam_member" "ccm_instance_admin" {
+  project = var.gcp_project_id
+  role    = "roles/compute.instanceAdmin.v1"
+  member  = "serviceAccount:${google_service_account.k8s_ccm_sa.email}"
+}
+
+# 서비스 계정의 인증 키(JSON) 파일 생성
+resource "google_service_account_key" "ccm_key" {
+  service_account_id = google_service_account.k8s_ccm_sa.name
+}
+
+# 생성된 뼈대 JSON 키 파일을 내 로컬 컴퓨터 ansible 폴더에 저장
+resource "local_file" "ccm_gcp_key_json" {
+  content  = base64decode(google_service_account_key.ccm_key.private_key)
+  filename = "${path.module}/../../ansible/roles/k8s_master/files/gcp-ccm-key.json"
+}

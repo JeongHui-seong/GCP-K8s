@@ -43,3 +43,45 @@ resource "google_compute_firewall" "allow_external_ingress" {
   }
   source_ranges = [ "0.0.0.0/0" ]
 }
+
+# 구글 로드밸런서 시스템(헬스체크 및 트래픽 전달) 대역 허용 규칙
+resource "google_compute_firewall" "allow_gcp_lb" {
+  name = "${var.prefix}-allow-gcp-lb"
+  network = google_compute_network.k8s_vpc.name
+
+  direction = "INGRESS"
+  priority = 1000
+
+  # 구글 로드밸런서가 사용하는 IP 대역
+  source_ranges = [
+    "35.191.0.0/16",
+    "130.211.0.0/22"
+  ]
+
+  # 쿠버네티스 인그레스 노드포트 대역 및 모니터링 포트 허용
+  allow {
+    protocol = "tcp"
+    ports = ["80", "443", "30000-32767", "9090", "3000"]
+  }
+
+  # 태그 기반 규칙 허용
+  target_tags = ["k8s-cluster"]
+}
+
+# Cloudflare 프록시가 직접 붙을 때를 대비
+# resource "google_compute_firewall" "allow_web_traffic" {
+#   name = "${var.prefix}-allow-web-traffic"
+#   network = google_compute_network.k8s_vpc.name
+
+#   direction = "INGRESS"
+#   priority = 1001
+#   source_ranges = ["0.0.0.0/0"] # Cloudflare IP 대역 넣기 고려
+
+#   allow {
+#     protocol = "tcp"
+#     ports = [ "80", "443" ]
+#   }
+
+#   # 태그 기반 규칙 허용
+#   target_tags = ["k8s-cluster"]
+# }

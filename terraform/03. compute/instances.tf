@@ -73,3 +73,32 @@ resource "google_compute_instance" "monitoring_vm" {
         scopes = ["cloud-platform"]
     }
 }
+
+# 워커 노드 1, 2를 하나의 인스턴스 그룹으로 묶음
+resource "google_compute_instance_group" "k8s_workers" {
+  name        = "${var.prefix}-workers-group"
+  description = "Kubernetes Worker Nodes Group"
+  zone        = var.gcp_zone
+
+  instances = google_compute_instance.k8s_workers[*].self_link
+
+  named_port {
+    name = "http"
+    port = 30080 # Nginx 인그레스가 열어줄 노드포트 번호
+  }
+}
+
+# 독립형 모니터링 VM을 인스턴스 그룹으로 묶음
+resource "google_compute_instance_group" "monitoring_group" {
+  name        = "monitoring-vm-group"
+  zone        = var.gcp_zone
+
+  instances = [
+    google_compute_instance.monitoring_vm.self_link
+  ]
+
+  named_port {
+    name = "grafana"
+    port = 3000 # 그라파나 기본 포트
+  }
+}

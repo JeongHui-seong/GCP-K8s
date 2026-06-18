@@ -40,3 +40,5 @@ roles/external_roles/
 .DS_Store
 .idea/
 .vscode/
+
+gcp-ccm-key.json

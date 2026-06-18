@@ -22,3 +22,15 @@ k8s_master
 k8s_workers
 EOF
 }
+
+# K8s 워커 노드 그룹 ID 배출
+output "k8s_workers_group_id" {
+  value       = google_compute_instance_group.k8s_workers.id
+  description = "로드밸런서가 가져갈 K8s 워커 인스턴스 그룹의 ID"
+}
+
+# 모니터링 VM 그룹 ID 배출
+output "monitoring_group_id" {
+  value       = google_compute_instance_group.monitoring_group.id
+  description = "로드밸런서가 가져갈 모니터링 인스턴스 그룹의 ID"
+}
