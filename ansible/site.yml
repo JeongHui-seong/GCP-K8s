@@ -22,3 +22,9 @@
   become: true
   roles:
     - k8s_network
+
+- name: 모니터링 VM Prometheus & Grafana 구현
+  hosts: monitoring
+  become: true
+  roles:
+    - monitoring

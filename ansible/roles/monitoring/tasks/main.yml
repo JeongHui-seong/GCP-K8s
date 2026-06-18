@@ -1,0 +1,114 @@
+---
+- name: 도커 의존성 패키지 설치
+  ansible.builtin.dnf:
+    name: device-mapper-persistent-data, lvm2
+    state: present
+  
+- name: 도커 공식 저장소 등록
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/centos/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+
+- name: Docker CE 및 관련 패키지 설치
+  ansible.builtin.dnf:
+    name: docker-ce, docker-ce-cli, containerd.io
+    state: present
+
+- name: 도커 서비스 활성화 및 시작
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: 프로메테우스 호스트 볼륨 디렉토리 생성
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0777' # 도커 내부 프로메테우스 유저가 쓸 수 있도록 권한 개방
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+  loop:
+    - { path: '/etc/prometheus' }
+    - { path: '/var/lib/prometheus' }
+    # 그라파나 관련 폴더들은 켜지자마자 글을 쓸 수 있게 컨테이너 유저인 472로 소유권을 넘기기
+    - { path: '/var/lib/grafana', owner: '472', group: '472' }
+    - { path: '/etc/grafana/provisioning/datasources', owner: '472', group: '472' }
+
+- name: 파이썬 pip 패키지 매니저 설치
+  ansible.builtin.dnf:
+    name: python3-pip
+    state: present
+
+- name: 파이썬 도커 제어 라이브러리 설치
+  ansible.builtin.pip:
+    name:
+      - "requests==2.28.1"
+      - "docker==6.1.3" # 최신 버전 호환 이슈로 6버전 고정
+      - "urllib3<2.0.0" # requests 버전 충돌 이슈로 2.0 미만 제한
+    state: present
+    executable: pip3
+
+- name: 프로메테우스 데이터 받아올 IP 설정 파일 배치
+  ansible.builtin.copy:
+    dest: /etc/prometheus/prometheus.yml
+    content: |
+      global:
+        scrape_interval: 15s
+
+      scrape_configs:
+        - job_name: 'Kubernetes-nodes'
+          static_configs:
+            - targets:
+              - '{{ hostvars['k8s-master']['private_ip'] }}:9100'
+              - '{{ hostvars['k8s-worker-1']['private_ip'] }}:9100'
+              - '{{ hostvars['k8s-worker-2']['private_ip'] }}:9100'
+
+- name: 그라파나 데이터소스 자동 연동 관리 파일 생성
+  ansible.builtin.copy:
+    dest: /etc/grafana/provisioning/datasources/prometheus-datasource.yml
+    content: |
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          access: proxy
+          url: http://prometheus:9090
+          isDefault: true
+
+- name: 프로메테우스와 그라파나 전용 도커 네트워크 생성
+  community.docker.docker_network:
+    name: monitoring-network
+    state: present
+
+- name: 프로메테우스 컨테이너 구동
+  community.docker.docker_container:
+    name: prometheus
+    image: prom/prometheus:v2.53.0
+    state: started
+    restart_policy: always
+    published_ports:
+      - "9090:9090"
+    networks:
+      - name: monitoring-network
+    volumes:
+      - /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /var/lib/prometheus:/prometheus
+    # 데이터가 10GB가 넘으면 옛날 데이터부터 삭제하는 command
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.size=10GB'
+
+- name: 그라파나 컨테이너 구동
+  community.docker.docker_container:
+    name: grafana
+    image: grafana/grafana:11.0.0
+    state: started
+    restart_policy: always
+    published_ports:
+      - "3000:3000"
+    networks:
+      - name: monitoring-network
+    volumes:
+      - /var/lib/grafana:/var/lib/grafana
+      - /etc/grafana/provisioning:/etc/grafana/provisioning

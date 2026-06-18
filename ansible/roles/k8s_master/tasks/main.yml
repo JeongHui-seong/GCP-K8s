@@ -1,6 +1,9 @@
 ---
 - name: 쿠버네티스 마스터 노드 초기화 (Calico CIDR 반영)
+  
   ansible.builtin.command: "kubeadm init --pod-network-cidr={{ k8s_pod_network_cidr }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
   register: init_output
   changed_when: true
   args:
@@ -25,6 +28,8 @@
 
 - name: 워커 노드가 부트스트랩할 'kubeadm join' 명령어 추출
   ansible.builtin.command: "kubeadm token create --print-join-command"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
   register: join_command
   changed_when: false
 
@@ -34,3 +39,15 @@
   delegate_to: "{{ item }}"
   delegate_facts: true
   loop: "{{ groups['k8s_cluster'] }}"
+
+- name: KSM 원격 배포를 위한 git 설치
+  ansible.builtin.dnf:
+    name: git
+    state: present
+
+- name: Kube-State-Metrics (KSM) 표준 매니페스트 배포
+  ansible.builtin.command: "kubectl apply -k https://github.com/kubernetes/kube-state-metrics/examples/standard"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: ksm_deploy
+  changed_when: "'created' in ksm_deploy.stdout or 'configured' in ksm_deploy.stdout"

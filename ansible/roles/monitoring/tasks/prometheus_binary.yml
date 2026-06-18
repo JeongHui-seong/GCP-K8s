@@ -1,0 +1,65 @@
+# ---
+# - name: 프로메테우스 다운로드 및 압축 해제
+#   ansible.builtin.unarchive:
+#     src: "https://github.com/prometheus/prometheus/releases/download/v2.53.0/prometheus-2.53.0.linux-amd64.tar.gz"
+#     dest: /tmp
+#     remote_src: yes
+
+# - name: 프로메테우스 바이너리 실행 파일 이동
+#   ansible.builtin.copy:
+#     src: "/tmp/prometheus-2.53.0.linux-amd64/{{ item }}"
+#     dest: "/usr/local/bin/{{ item }}"
+#     mode: '0755'
+#     remote_src: yes
+#     owner: root
+#     group: root
+#   loop:
+#     - prometheus
+#     - promtool
+
+# - name: 프로메테우스 설정 및 데이터 디렉토리 생성
+#   ansible.builtin.file:
+#     path: "{{ item }}"
+#     state: directory
+#     mode: '0755'
+#     owner: root
+#     group: root
+#   loop:
+#     - /etc/prometheus
+#     - /var/lib/prometheus
+
+# - name: 기본 설정 파일 및 콘솔 파일 이동
+#   ansible.builtin.copy:
+#     src: "/tmp/prometheus-2.53.0.linux-amd64/{{ item }}"
+#     dest: "/etc/prometheus/{{ item }}"
+#     remote_src: yes
+#   loop:
+#     - prometheus.yml
+#     - consoles
+#     - console_libraries
+
+# - name: 프로메테우스 systemd 서비스 등록
+#   ansible.builtin.copy:
+#     dest: /etc/systemd/system/prometheus.service
+#     content: |
+#       [Unit]
+#       Description=Prometheus Monitoring System
+#       Wants=network-online.target
+#       After=network-online.target
+
+#       [Service]
+#       User=root
+#       ExecStart=/usr/local/bin/prometheus \
+#       --config.file=/etc/prometheus/prometheus.yml \
+#       --storage.tsdb.path=/var/lib/prometheus/
+#       Restart=always
+
+#       [Install]
+#       WantedBy=multi-user.target
+
+# - name: 프로메테우스 서비스 활성화 및 시작
+#   ansible.builtin.systemd:
+#     name: prometheus
+#     state: started
+#     enabled: yes
+#     daemon_reload: yes

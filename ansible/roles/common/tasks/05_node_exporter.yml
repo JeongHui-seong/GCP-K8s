@@ -1,0 +1,33 @@
+---
+- name: Node Exporter 다운로드 및 압축 해제
+  ansible.builtin.unarchive:
+    src: "https://github.com/prometheus/node_exporter/releases/download/v1.8.1/node_exporter-1.8.1.linux-amd64.tar.gz"
+    dest: /usr/local/bin
+    remote_src: yes
+    extra_opts: [--strip-components=1] # 압축 파일 안의 최상위 폴더만 까고 파일만 추출
+    owner: root
+    group: root
+  
+- name: Node Exporter systemd 서비스 등록
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/node_exporter.service
+    content: |
+      [Unit]
+      Description=Node Exporter
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      User=root
+      ExecStart=/usr/local/bin/node_exporter
+      Restarts=always
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Node Exporter 서비스 활성화 및 시작
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: started
+    enabled: yes
+    daemon_reload: yes
