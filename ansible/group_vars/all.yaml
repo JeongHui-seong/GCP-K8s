@@ -2,3 +2,4 @@
 # 앤서블이 사용할 SSH 유저 이름 동기화
 ansible_user: "jgmltjd99"
 k8s_pod_network_cidr: "192.168.0.0/16"
+project_id: "k8s-project-499610"

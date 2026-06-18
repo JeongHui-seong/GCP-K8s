@@ -112,3 +112,13 @@
     volumes:
       - /var/lib/grafana:/var/lib/grafana
       - /etc/grafana/provisioning:/etc/grafana/provisioning
+
+- name: 프로메테우스와 그라파나 데이터를 GCS로 자동 백업 설정
+  ansible.builtin.cron:
+    name: "gcs monitoring data backup"
+    minute: "0"
+    hour: "22"
+    job: >
+      sudo gsutil rsync -r /var/lib/grafana gs://k8s-monitoring-backup-{{ project_id }}/grafana &&
+      sudo gsutil rsync -r /var/lib/prometheus gs://k8s-monitoring-backup-{{ project_id }}/prometheus
+  become: true

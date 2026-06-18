@@ -45,6 +45,13 @@ resource "google_project_iam_member" "monitoring_vm_sa_monitoring_viewer" {
   member  = "serviceAccount:${google_service_account.monitoring_vm_sa.email}"
 }
 
+# Monitoring VM용 서비스 어카운트에 Storage 파일 업로드 권한 (백업 데이터 업로드용)
+resource "google_project_iam_member" "monitoring_vm_sa_storage_admin" {
+  project = var.gcp_project_id
+  role    = "roles/storage.objectAdmin"
+  member  = "serviceAccount:${google_service_account.monitoring_vm_sa.email}"
+}
+
 # IAP SSH 터널링 접속 권한 부여
 resource "google_project_iam_member" "user_iap_tunnel_accessor" {
   project = var.gcp_project_id
