@@ -18,13 +18,18 @@ resource "google_compute_url_map" "url_map" {
 
   # 도메인 이름(Host)에 따라 서로 다른 백엔드로 패킷을 찢어주는 규칙
   host_rule {
-    hosts        = ["shop.jhs.com"]
+    hosts        = ["shop.jhs-k8s.kro.kr"]
     path_matcher = "shop-matcher"
   }
 
   host_rule {
-    hosts        = ["monitor.jhs.com"]
+    hosts        = ["monitor.jhs-k8s.kro.kr"]
     path_matcher = "monitor-matcher"
+  }
+
+  host_rule {
+    hosts        = ["argo.jhs-k8s.kro.kr"]
+    path_matcher = "argo-matcher"
   }
 
   path_matcher {
@@ -35,6 +40,11 @@ resource "google_compute_url_map" "url_map" {
   path_matcher {
     name            = "monitor-matcher"
     default_service = google_compute_backend_service.monitoring_backend.id
+  }
+
+  path_matcher {
+    name            = "argo-matcher"
+    default_service = google_compute_backend_service.k8s_worker_backend.id
   }
 }
 
