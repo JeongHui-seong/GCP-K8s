@@ -1,0 +1,93 @@
+---
+- name: 1-1. Nginx 인그레스 컨트롤러 설치
+  ansible.builtin.shell: |
+    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.1/deploy/static/provider/baremetal/deploy.yaml
+  register: ingress_install
+  changed_when: "'created' in ingress_install.stdout or 'configured' in ingress_install.stdout"
+
+- name: 1-2. Nginx 인그레스 컨트롤러가 완전히 뜰 때까지 대기
+  ansible.builtin.shell: |
+    kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=120s
+  failed_when: false
+
+- name: 1-3. 인그레스 서비스를 NodePort(30080)로 패치 (테라폼 LB 연동용)
+  ansible.builtin.shell: |
+    kubectl patch svc ingress-nginx-controller -n ingress-nginx -p '{"spec": {"type": "NodePort", "ports": [{"name": "http", "port": 80, "targetPort": "http", "nodePort": 30080}]}}'
+  register: patch_ingress
+  changed_when: "'patched' in patch_ingress.stdout"
+
+# ArgoCD 설치 및 보안 비활성화
+- name: 2-1. argocd 전용 네임스페이스 생성
+  ansible.builtin.shell: |
+    kubectl create namespace argocd
+  register: ns_creation
+  failed_when: false
+  changed_when: "'created' in ns_creation.stdout"
+
+- name: 2-2. ArgoCD 공식 안정화 버전 배포 (--server-side 대용량 설치)
+  ansible.builtin.shell: |
+    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml --server-side --force-conflicts
+  register: argo_install
+  changed_when: "'created' in argo_install.stdout or 'configured' in argo_install.stdout"
+
+- name: 2-3. ArgoCD 자체 SSL 끄기 (Insecure 패치)
+  ansible.builtin.shell: |
+    kubectl patch deployment argocd-server -n argocd --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/command", "value": ["argocd-server"]}, {"op": "add", "path": "/spec/template/spec/containers/0/args", "value": ["--insecure"]}]'
+  register: patch_argo
+  changed_when: "'patched' in patch_argo.stdout"
+
+# ArgoCD 인그레스 설정 및 초기 비밀번호 확인
+- name: 3-1. ArgoCD 인그레스 템플릿 배포 파일 마스터 노드로 전송
+  ansible.builtin.template:
+    src: templates/argocd-ingress.yaml.j2
+    dest: /home/jgmltjd99/argocd-ingress.yaml
+    owner: jgmltjd99
+    group: jgmltjd99
+    mode: '0644'
+
+- name: 3-2. ArgoCD 인그레스 규격 반영 (도메인 연동)
+  ansible.builtin.shell: |
+    kubectl apply -f /home/jgmltjd99/argocd-ingress.yaml
+  register: ingress_apply
+  changed_when: "'created' in ingress_apply.stdout or 'configured' in ingress_apply.stdout"
+
+- name: 3-3. ArgoCD 대시보드 로그인용 초기 비밀번호 추출
+  ansible.builtin.shell: |
+    kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode
+  register: argo_password
+  changed_when: false
+
+- name: ArgoCD 초기 패스워드 출력
+  ansible.builtin.debug:
+    msg: "ArgoCD 초기 비밀번호는 [ {{ argo_password.stdout }} ] 입니다. ID는 admin 입니다."
+
+- name: 3-5. 쇼핑몰 서비스 전용 네임스페이스 생성
+  ansible.builtin.shell: |
+    kubectl create namespace shop
+  register: shop_ns_creation
+  failed_when: false
+  changed_when: "'created' in shop_ns_creation.stdout"
+
+- name: ArgoCD Application (Online Boutique) 자동 생성 및 연동
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: argoproj.io/v1alpha1
+      kind: Application
+      metadata:
+        name: online-boutique
+        namespace: argocd
+      spec:
+        project: default
+        source:
+          # 🛑 사용자님의 실제 k8s-manifests GitHub 주소로 변경하세요!
+          repoURL: 'https://github.com/JeongHui-seong/GCP-K8s-ArgoCD.git'
+          targetRevision: HEAD
+          path: . # YAML 파일들이 저장소 루트(.)에 있음을 명시
+        destination:
+          server: 'https://kubernetes.default.svc' # 내부 클러스터 기본 주소
+          namespace: shop # 쇼핑몰 컨테이너들이 띄워질 namespace
+        syncPolicy:
+          automated: # 3분 감시 자동 배포(Automatic) 활성화
+            prune: true # Git에서 파일 지우면 K8s에서도 같이 지움
+            selfHeal: true # 누군가 K8s 수동으로 건드리면 Git 상태로 강제 복구

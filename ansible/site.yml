@@ -28,3 +28,9 @@
   become: true
   roles:
     - monitoring
+
+- name: ArgoCD & Nginx Ingress 설치 및 설정
+  hosts: k8s_master
+  become: true
+  roles:
+    - argocd
