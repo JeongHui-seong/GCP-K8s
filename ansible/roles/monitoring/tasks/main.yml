@@ -119,6 +119,7 @@
     minute: "0"
     hour: "22"
     job: >
-      sudo gsutil rsync -r /var/lib/grafana gs://k8s-monitoring-backup-{{ project_id }}/grafana &&
-      sudo gsutil rsync -r /var/lib/prometheus gs://k8s-monitoring-backup-{{ project_id }}/prometheus
+      BACKUP_DATE=$(date +\%Y\%m\%d) &&
+      sudo gsutil cp -r /var/lib/grafana gs://k8s-monitoring-backup-{{ project_id }}/grafana-${BACKUP_DATE} &&
+      sudo gsutil cp -r /var/lib/prometheus gs://k8s-monitoring-backup-{{ project_id }}/prometheus-${BACKUP_DATE}
   become: true
