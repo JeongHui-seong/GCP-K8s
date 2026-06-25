@@ -123,3 +123,96 @@
       sudo gsutil cp -r /var/lib/grafana gs://k8s-monitoring-backup-{{ project_id }}/grafana-${BACKUP_DATE} &&
       sudo gsutil cp -r /var/lib/prometheus gs://k8s-monitoring-backup-{{ project_id }}/prometheus-${BACKUP_DATE}
   become: true
+
+- name: Nginx 및 SSL 설정 파일이 위치할 디렉토리 생성
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /etc/nginx/conf.d
+    - /etc/letsencrypt
+
+- name: Nginx 리버스 프록시 설정 파일(Jinja2) 전송
+  ansible.builtin.copy:
+    dest: /etc/nginx/conf.d/monitoring.conf
+    content: |
+      server {
+          listen 80;
+          server_name {{ monitor_domain }};
+          
+          # Let's Encrypt 인증서 발급을 위한 챌린지 경로 뚫어두기
+          location /.well-known/acme-challenge/ {
+              root /var/www/certbot;
+          }
+
+          # HTTP로 들어오면 HTTPS로 강제 리다이렉트
+          location / {
+              return 301 https://$host$request_uri;
+          }
+      }
+
+      server {
+          listen 443 ssl;
+          server_name {{ monitor_domain }};
+
+          ssl_certificate /etc/letsencrypt/live/{{ monitor_domain }}/fullchain.pem;
+          ssl_certificate_key /etc/letsencrypt/live/{{ monitor_domain }}/privkey.pem;
+
+          location / {
+              proxy_pass http://grafana:3000; # 🌟 도커 네트워크 내부의 그라파나로 토스
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+          }
+      }
+
+- name: Let's Encrypt 웹 루트로 쓸 빈 폴더 생성
+  ansible.builtin.file:
+    path: /var/www/certbot
+    state: directory
+    mode: '0755'
+
+- name: Certbot 도커를 이용해 SSL 무료 인증서 발급 (최초 1회 실행)
+  community.docker.docker_container:
+    name: certbot
+    image: certbot/certbot:v2.11.0
+    state: started
+    # 도메인 소유권을 확인받기 위해 인증 명령어를 주입합니다.
+    command: >
+      certonly --webroot -w /var/www/certbot 
+      -d {{ monitor_domain }} 
+      --email {{ email_address }} 
+      --agree-tos --no-eff-email --keep-until-expiring --non-interactive
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+      - /var/www/certbot:/var/www/certbot
+    # 발급이 끝나면 컨테이너가 자동으로 멈추도록 설정
+    detach: false
+
+- name: 외부 트래픽을 받아줄 Nginx 리버스 프록시 컨테이너 구동
+  community.docker.docker_container:
+    name: nginx-proxy
+    image: nginx:1.25-alpine
+    state: started
+    restart_policy: always
+    published_ports:
+      - "80:80"   # HTTP 수신용
+      - "443:443" # HTTPS 수신용
+    networks:
+      - name: monitoring-network # 🌟 프로메테우스/그라파나가 속한 대역에 결합
+    volumes:
+      - /etc/nginx/conf.d:/etc/nginx/conf.d:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+
+- name: Certbot SSL 인증서 자동 갱신(Renew) 크론탭 등록
+  ansible.builtin.cron:
+    name: "renew let's encrypt ssl certificate for docker"
+    day: "1" # 매달 1일 새벽에 만료일 검사 후 자동 갱신 및 Nginx 재부팅
+    hour: "03"
+    minute: "0"
+    job: >
+      docker run --rm -v /etc/letsencrypt:/etc/letsencrypt -v /var/www/certbot:/var/www/certbot certbot/certbot renew &&
+      docker exec nginx-proxy nginx -s reload
