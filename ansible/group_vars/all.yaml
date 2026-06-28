@@ -3,6 +3,6 @@
 ansible_user: "jgmltjd99"
 k8s_pod_network_cidr: "192.168.0.0/16"
 project_id: "k8s-project-499610"
-argo_domain: "argo.jhs-dev.duckdns.org" 
-monitor_domain: "monitor.jhs-dev.duckdns.org"
+argo_domain: "argo.jhs-dev.cloud" 
+monitor_domain: "monitor.jhs-dev.cloud"
 email_address: "jgmltjd99@naver.com"

@@ -18,17 +18,17 @@ resource "google_compute_url_map" "url_map" {
 
   # 도메인 이름(Host)에 따라 서로 다른 백엔드로 패킷을 찢어주는 규칙
   host_rule {
-    hosts        = ["shop.jhs-dev.duckdns.org"]
+    hosts        = ["shop.jhs-dev.cloud"]
     path_matcher = "shop-matcher"
   }
 
   host_rule {
-    hosts        = ["monitor.jhs-dev.duckdns.org"]
+    hosts        = ["monitor.jhs-dev.cloud"]
     path_matcher = "monitor-matcher"
   }
 
   host_rule {
-    hosts        = ["argo.jhs-dev.duckdns.org"]
+    hosts        = ["argo.jhs-dev.cloud"]
     path_matcher = "argo-matcher"
   }
 
@@ -40,6 +40,12 @@ resource "google_compute_url_map" "url_map" {
   path_matcher {
     name            = "monitor-matcher"
     default_service = google_compute_backend_service.monitoring_backend.id
+
+    # 챌린지 패스 우회용 와일드카드 규칙 추가
+    path_rule {
+      paths = [ "/*" ]
+      service = google_compute_backend_service.monitoring_backend.id
+    }
   }
 
   path_matcher {
