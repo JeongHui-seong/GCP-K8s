@@ -95,8 +95,8 @@ resource "google_compute_health_check" "monitoring_health_check" {
   name = "monitoring-vm-health-check"
 
   http_health_check {
-    port = 3000 # 그라파나 기본 웹 포트 혹은 프로메테우스 9090
-    request_path = "/api/health"
+    port = 80 # 그라파나 기본 웹 포트가 아닌 nginx 리버스 프록시로 헬스체크
+    request_path = "/healthz"
   }
 }
 

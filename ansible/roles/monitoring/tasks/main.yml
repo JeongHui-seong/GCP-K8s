@@ -133,6 +133,12 @@
     - /etc/nginx/conf.d
     - /etc/letsencrypt
 
+- name: Let's Encrypt 웹 루트로 쓸 빈 폴더 생성
+  ansible.builtin.file:
+    path: /var/www/certbot
+    state: directory
+    mode: '0755'
+
 - name: Nginx 리버스 프록시 설정 파일(Jinja2) 전송
   ansible.builtin.copy:
     dest: /etc/nginx/conf.d/monitoring.conf
@@ -140,6 +146,12 @@
       server {
           listen 80;
           server_name {{ monitor_domain }};
+
+          # 구글 로드밸런서 리버스 프록시 헬스 체크
+          location /healthz {
+            access_log off;
+            return 200 'OK';
+          }
           
           # Let's Encrypt 인증서 발급을 위한 챌린지 경로 뚫어두기
           location /.well-known/acme-challenge/ {
@@ -152,27 +164,22 @@
           }
       }
 
-      server {
-          listen 443 ssl;
-          server_name {{ monitor_domain }};
 
-          ssl_certificate /etc/letsencrypt/live/{{ monitor_domain }}/fullchain.pem;
-          ssl_certificate_key /etc/letsencrypt/live/{{ monitor_domain }}/privkey.pem;
-
-          location / {
-              proxy_pass http://grafana:3000; # 🌟 도커 네트워크 내부의 그라파나로 토스
-              proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-          }
-      }
-
-- name: Let's Encrypt 웹 루트로 쓸 빈 폴더 생성
-  ansible.builtin.file:
-    path: /var/www/certbot
-    state: directory
-    mode: '0755'
+- name: 외부 트래픽을 받아줄 Nginx 리버스 프록시 컨테이너 구동
+  community.docker.docker_container:
+    name: nginx-proxy
+    image: nginx:1.25-alpine
+    state: started
+    restart_policy: always
+    published_ports:
+      - "80:80"   # HTTP 수신용
+      - "443:443" # HTTPS 수신용
+    networks:
+      - name: monitoring-network # 🌟 프로메테우스/그라파나가 속한 대역에 결합
+    volumes:
+      - /etc/nginx/conf.d:/etc/nginx/conf.d:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
 
 - name: Certbot 도커를 이용해 SSL 무료 인증서 발급 (최초 1회 실행)
   community.docker.docker_container:
@@ -191,21 +198,30 @@
     # 발급이 끝나면 컨테이너가 자동으로 멈추도록 설정
     detach: false
 
-- name: 외부 트래픽을 받아줄 Nginx 리버스 프록시 컨테이너 구동
-  community.docker.docker_container:
-    name: nginx-proxy
-    image: nginx:1.25-alpine
-    state: started
-    restart_policy: always
-    published_ports:
-      - "80:80"   # HTTP 수신용
-      - "443:443" # HTTPS 수신용
-    networks:
-      - name: monitoring-network # 🌟 프로메테우스/그라파나가 속한 대역에 결합
-    volumes:
-      - /etc/nginx/conf.d:/etc/nginx/conf.d:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-      - /var/www/certbot:/var/www/certbot:ro
+- name: 인증서 발급 완료 후 Https용 Nginx 설정 파일 추가 전송
+  ansible.builtin.copy:
+    dest: /etc/nginx/conf.d/monitoring-ssl.conf
+    content: |
+      server {
+          listen 443 ssl;
+          server_name {{ monitor_domain }};
+
+          ssl_certificate /etc/letsencrypt/live/{{ monitor_domain }}/fullchain.pem;
+          ssl_certificate_key /etc/letsencrypt/live/{{ monitor_domain }}/privkey.pem;
+
+          location / {
+              proxy_pass http://grafana:3000; # 도커 네트워크 내부의 그라파나로 토스
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+          }
+      }
+
+- name: Nginx 컨테이너에 신규 SSL 설정 무중단 반영 (Reload)
+  ansible.builtin.shell: |
+    docker exec nginx-proxy nginx -s reload
+  changed_when: true
 
 - name: Certbot SSL 인증서 자동 갱신(Renew) 크론탭 등록
   ansible.builtin.cron:
