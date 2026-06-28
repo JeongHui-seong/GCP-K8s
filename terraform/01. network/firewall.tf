@@ -68,20 +68,20 @@ resource "google_compute_firewall" "allow_gcp_lb" {
   target_tags = ["k8s-cluster"]
 }
 
-# Cloudflare 프록시가 직접 붙을 때를 대비
-# resource "google_compute_firewall" "allow_web_traffic" {
-#   name = "${var.prefix}-allow-web-traffic"
-#   network = google_compute_network.k8s_vpc.name
+# Let's Encrypt 서버 접속
+resource "google_compute_firewall" "allow_web_traffic" {
+  name = "${var.prefix}-allow-web-traffic"
+  network = google_compute_network.k8s_vpc.name
 
-#   direction = "INGRESS"
-#   priority = 1001
-#   source_ranges = ["0.0.0.0/0"] # Cloudflare IP 대역 넣기 고려
+  direction = "INGRESS"
+  priority = 1001
+  source_ranges = ["0.0.0.0/0"]
 
-#   allow {
-#     protocol = "tcp"
-#     ports = [ "80", "443" ]
-#   }
+  allow {
+    protocol = "tcp"
+    ports = [ "80", "443" ]
+  }
 
-#   # 태그 기반 규칙 허용
-#   target_tags = ["k8s-cluster"]
-# }
+  # 태그 기반 규칙 허용
+  target_tags = ["k8s-cluster"]
+}

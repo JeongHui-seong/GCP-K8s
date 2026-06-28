@@ -18,17 +18,17 @@ resource "google_compute_url_map" "url_map" {
 
   # 도메인 이름(Host)에 따라 서로 다른 백엔드로 패킷을 찢어주는 규칙
   host_rule {
-    hosts        = ["shop.jhs-k8s.kro.kr"]
+    hosts        = ["shop.jhs-dev.duckdns.org"]
     path_matcher = "shop-matcher"
   }
 
   host_rule {
-    hosts        = ["monitor.jhs-k8s.kro.kr"]
+    hosts        = ["monitor.jhs-dev.duckdns.org"]
     path_matcher = "monitor-matcher"
   }
 
   host_rule {
-    hosts        = ["argo.jhs-k8s.kro.kr"]
+    hosts        = ["argo.jhs-dev.duckdns.org"]
     path_matcher = "argo-matcher"
   }
 
