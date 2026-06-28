@@ -54,7 +54,7 @@ resource "google_compute_url_map" "url_map" {
   }
 }
 
-# 백엔드 서비스정의: K8s 워커 노드 그룹 (shop.jhs.com 용)
+# 백엔드 서비스정의: K8s 워커 노드 그룹
 resource "google_compute_backend_service" "k8s_worker_backend" {
   name        = "${var.prefix}-worker-backend-service"
   port_name   = "http"
@@ -70,10 +70,10 @@ resource "google_compute_backend_service" "k8s_worker_backend" {
   }
 }
 
-# 백엔드 서비스 정의: 독립형 모니터링 VM (monitor.jhs.com 용)
+# 백엔드 서비스 정의: 독립형 모니터링 VM
 resource "google_compute_backend_service" "monitoring_backend" {
   name        = "${var.prefix}-monitoring-backend-service"
-  port_name   = "grafana"
+  port_name   = "http"
   protocol    = "HTTP"
   timeout_sec = 30
 
@@ -114,7 +114,45 @@ resource "google_compute_global_forwarding_rule" "http_forwarding_rule" {
   ip_address = google_compute_global_address.lb_static_ip.address
 }
 
+# 세 도메인 한번에 커버하는 관리형 SSL 인증서
+resource "google_compute_managed_ssl_certificate" "all_certs" {
+  name = "jhs-all-domains-ssl-cert"
+  managed {
+    domains = [
+      "shop.jhs-dev.cloud",
+      "monitor.jhs-dev.cloud",
+      "argo.jhs-dev.cloud"
+    ]
+  }
+}
+
+# HTTPS 프록시 (기존 url_map 재사용)
+resource "google_compute_target_https_proxy" "https_proxy" {
+  name             = "jhs-https-proxy"
+  url_map          = google_compute_url_map.url_map.id
+  ssl_certificates = [google_compute_managed_ssl_certificate.all_certs.id]
+}
+
+# 443 포워딩 룰
+resource "google_compute_global_forwarding_rule" "https_forwarding_rule" {
+  name       = "jhs-https-frontend"
+  target     = google_compute_target_https_proxy.https_proxy.id
+  port_range = "443"
+  ip_address = google_compute_global_address.lb_static_ip.address
+}
+
+# HTTP → HTTPS 리다이렉트 전용 URL Map
+resource "google_compute_url_map" "http_redirect" {
+  name = "jhs-http-redirect"
+  default_url_redirect {
+    https_redirect         = true
+    redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
+    strip_query            = false
+  }
+}
+
+# 기존 HTTP 프록시를 리다이렉트 전용으로 교체
 resource "google_compute_target_http_proxy" "http_proxy" {
   name    = "jhs-http-proxy"
-  url_map = google_compute_url_map.url_map.id
+  url_map = google_compute_url_map.http_redirect.id  # 기존 url_map → http_redirect로 변경
 }
