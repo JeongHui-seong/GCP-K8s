@@ -2,9 +2,6 @@
 - name: 모니터링 시스템 긴급 재난 복구(DR) 플레이북
   hosts: k8s-monitoring
   become: true
-  vars:
-    project_id: "{{ project_id }}"
-    # playbook 실행 시 무조건 -e "target_date=YYYYMMDD" 를 주입해야함.
 
   tasks:
     - name: 필수 변수(target_date) 입력 여부 검증
@@ -12,15 +9,16 @@
         msg: "playbook 실행 시 무조건 -e 'target_date=YYYYMMDD' 를 주입해야함."
       when: target_date is not defined
 
-    - name: 기존 프로메테우스 및 그라파나 컨테이너 일시 중지
-      community.docker.docker_container:
-        name: "{{ item }}"
-        state: stopped
+    - name: 기존 컨테이너 완전 제거
+      ansible.builtin.shell: |
+        docker rm -f {{ item }} || true
       loop:
-        - prometheus
+        - nginx-proxy
         - grafana
+        - prometheus
+      changed_when: true
 
-    - name: 데이터 유실/오염 방지를 위해 기존 디렉토리 백업 파기 (초기화)
+    - name: 기존 데이터 디렉토리 삭제
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
@@ -28,7 +26,7 @@
         - /var/lib/grafana
         - /var/lib/prometheus
 
-    - name: 깨끗한 상태의 데이터 디렉토리 재생성
+    - name: 깨끗한 데이터 디렉토리 재생성
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: directory
@@ -38,12 +36,6 @@
       loop:
         - { path: '/var/lib/prometheus' }
         - { path: '/var/lib/grafana', owner: '472', group: '472' }
-    
-    - name: 임시 임포트 디렉토리 생성
-      ansible.builtin.file:
-        path: /tmp/recovery
-        state: directory
-        mode: '0755'
 
     - name: GCS 버킷에서 백업본 다운로드
       ansible.builtin.shell: |
@@ -51,22 +43,151 @@
         gsutil -m cp -r gs://k8s-monitoring-backup-{{ project_id }}/prometheus-{{ target_date }}/* /var/lib/prometheus/
       changed_when: true
 
-    - name: 복원된 데이터 파일들의 권한 소유주 정돈
+    - name: 복원된 grafana 데이터 권한 정돈
       ansible.builtin.file:
         path: /var/lib/grafana
         recurse: yes
         owner: '472'
         group: '472'
 
-    - name: 복구 완료된 프로메테우스 및 그라파나 컨테이너 재가동
-      community.docker.docker_container:
-        name: "{{ item }}"
-        state: started
-      loop:
-        - prometheus
-        - grafana
+    - name: 복원된 prometheus 데이터 권한 정돈
+      ansible.builtin.file:
+        path: /var/lib/prometheus
+        recurse: yes
+        owner: '65534'
+        group: '65534'
+        mode: '0755'
 
-    - name: 리버스 프록시(Nginx) 리스타트
+    - name: 프로메테우스 설정 디렉토리 생성
+      ansible.builtin.file:
+        path: /etc/prometheus
+        state: directory
+        mode: '0755'
+
+    - name: 프로메테우스 설정 파일 배치
+      ansible.builtin.copy:
+        dest: /etc/prometheus/prometheus.yml
+        content: |
+          global:
+            scrape_interval: 15s
+
+          scrape_configs:
+            - job_name: 'Kubernetes-nodes'
+              static_configs:
+                - targets:
+                  - '{{ hostvars['k8s-master']['private_ip'] }}:9100'
+                  - '{{ hostvars['k8s-worker-1']['private_ip'] }}:9100'
+                  - '{{ hostvars['k8s-worker-2']['private_ip'] }}:9100'
+
+    - name: 그라파나 프로비저닝 디렉토리 생성
+      ansible.builtin.file:
+        path: /etc/grafana/provisioning/datasources
+        state: directory
+        mode: '0755'
+        owner: '472'
+        group: '472'
+
+    - name: 그라파나 데이터소스 설정 파일 배치
+      ansible.builtin.copy:
+        dest: /etc/grafana/provisioning/datasources/prometheus-datasource.yml
+        content: |
+          apiVersion: 1
+          datasources:
+            - name: Prometheus
+              type: prometheus
+              access: proxy
+              url: http://prometheus:9090
+              isDefault: true
+
+    - name: Nginx 설정 파일 배치
+      ansible.builtin.copy:
+        dest: /etc/nginx/conf.d/monitoring.conf
+        content: |
+          server {
+              listen 80;
+              server_name {{ monitor_domain }};
+
+              location /healthz {
+                access_log off;
+                return 200 'OK';
+              }
+
+              location / {
+                  proxy_pass http://grafana:3000;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+
+    - name: monitoring-network 존재 확인 및 생성
+      community.docker.docker_network:
+        name: monitoring-network
+        state: present
+
+    - name: 프로메테우스 컨테이너 기동
+      community.docker.docker_container:
+        name: prometheus
+        image: prom/prometheus:v2.53.0
+        state: started
+        recreate: true
+        restart_policy: always
+        published_ports:
+          - "9090:9090"
+        networks:
+          - name: monitoring-network
+        volumes:
+          - /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+          - /var/lib/prometheus:/prometheus
+        command:
+          - '--config.file=/etc/prometheus/prometheus.yml'
+          - '--storage.tsdb.path=/prometheus'
+          - '--storage.tsdb.retention.size=10GB'
+
+    - name: 그라파나 컨테이너 기동
+      community.docker.docker_container:
+        name: grafana
+        image: grafana/grafana:11.0.0
+        state: started
+        recreate: true
+        restart_policy: always
+        published_ports:
+          - "3000:3000"
+        networks:
+          - name: monitoring-network
+        volumes:
+          - /var/lib/grafana:/var/lib/grafana
+          - /etc/grafana/provisioning:/etc/grafana/provisioning
+
+    - name: Nginx 컨테이너 기동
       community.docker.docker_container:
         name: nginx-proxy
-        state: restarted
+        image: nginx:1.25-alpine
+        state: started
+        recreate: true
+        restart_policy: always
+        published_ports:
+          - "80:80"
+        networks:
+          - name: monitoring-network
+        volumes:
+          - /etc/nginx/conf.d:/etc/nginx/conf.d:ro
+
+    - name: 프로메테우스 헬스체크
+      ansible.builtin.uri:
+        url: "http://localhost:9090/-/healthy"
+        status_code: 200
+      register: prometheus_health
+      retries: 10
+      delay: 5
+      until: prometheus_health.status == 200
+
+    - name: 그라파나 헬스체크
+      ansible.builtin.uri:
+        url: "http://localhost:3000/api/health"
+        status_code: 200
+      register: grafana_health
+      retries: 10
+      delay: 5
+      until: grafana_health.status == 200
