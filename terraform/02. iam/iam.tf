@@ -91,8 +91,16 @@ resource "google_service_account_key" "ccm_key" {
   service_account_id = google_service_account.k8s_ccm_sa.name
 }
 
-# 생성된 뼈대 JSON 키 파일을 내 로컬 컴퓨터 ansible 폴더에 저장
-resource "local_file" "ccm_gcp_key_json" {
-  content  = base64decode(google_service_account_key.ccm_key.private_key)
-  filename = "${path.module}/../../ansible/roles/k8s_master/files/gcp-ccm-key.json"
+# 워커 노드용 SA에 Secret Manager 접근 권한
+resource "google_project_iam_member" "k8s_vm_sa_secret_accessor" {
+  project = var.gcp_project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.k8s_vm_sa.email}"
+}
+
+# 워커 노드용 SA에 Compute Viewer 권한
+resource "google_project_iam_member" "k8s_vm_sa_compute_viewer" {
+  project = var.gcp_project_id
+  role    = "roles/compute.viewer"
+  member  = "serviceAccount:${google_service_account.k8s_vm_sa.email}"
 }

@@ -32,7 +32,22 @@ variable "boot_image" {
   description = "Boot image for compute instances"
 }
 
-variable "k8s_tag" {
+variable "k8s_tag_cluster" {
   type = string
   default = "k8s-cluster"
+}
+
+variable "k8s_tag_master" {
+  type = string
+  default = "k8s-master"
+}
+
+variable "k8s_tag_worker" {
+  type = string
+  default = "k8s-worker"
+}
+
+variable "k8s_tag_monitoring" {
+  type = string
+  default = "k8s-monitoring"
 }
