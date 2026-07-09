@@ -26,19 +26,12 @@
     group: "{{ ansible_user }}"
     mode: '0600'
 
-- name: 워커 노드가 부트스트랩할 'kubeadm join' 명령어 추출
-  ansible.builtin.command: "kubeadm token create --print-join-command"
+- name: 워커 노드용 조인 토큰 생성 및 GCP Secret Manager 업데이트
+  ansible.builtin.shell: |
+    TOKEN=$(kubeadm token create)
+    echo "$TOKEN" | gcloud secrets versions add k8s-join-token --data-file=-
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
-  register: join_command
-  changed_when: false
-
-- name: 추출한 조인 명령어를 팩트로 등록
-  ansible.builtin.set_fact:
-    k8s_join_command: "{{ join_command.stdout }}"
-  delegate_to: "{{ item }}"
-  delegate_facts: true
-  loop: "{{ groups['k8s_cluster'] }}"
 
 - name: KSM 원격 배포를 위한 git 설치
   ansible.builtin.dnf:
@@ -51,3 +44,21 @@
     KUBECONFIG: /etc/kubernetes/admin.conf
   register: ksm_deploy
   changed_when: "'created' in ksm_deploy.stdout or 'configured' in ksm_deploy.stdout"
+
+- name: 쿠버네티스 메트릭 서버(Metrics Server) 매니페스트 다운로드
+  ansible.builtin.get_url:
+    url: https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+    dest: /tmp/metrics-server.yaml
+    mode: '0644'
+
+- name: 사설 클러스터 통신을 위한 TLS 인증서 검증 무시 옵션 주입
+  ansible.builtin.replace:
+    path: /tmp/metrics-server.yaml
+    regexp: '^(\s*)-\s*--secure-port=(\d+)\s*$'
+    replace: '\1- --secure-port=\2\n\1- --kubelet-insecure-tls'
+
+- name: 메트릭 서버 클러스터에 배포
+  kubernetes.core.k8s:
+    state: present
+    src: /tmp/metrics-server.yaml
+    kubeconfig: /etc/kubernetes/admin.conf

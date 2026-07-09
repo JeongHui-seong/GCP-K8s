@@ -1,0 +1,8 @@
+plugin: gcp_compute
+projects:
+  - {{ project_id }}
+filters:
+  - tags = 'k8s-cluster' # 공통 클러스터 태그로 먼저 필터링
+keyed_groups:
+  - key: tags
+    prefix: tag
