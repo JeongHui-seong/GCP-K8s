@@ -23,25 +23,14 @@ resource "google_compute_instance" "k8s_master" {
     }
 }
 
-# 시크릿 컨테이너 생성
-resource "google_secret_manager_secret" "k8s_token" {
-  secret_id = "k8s-join-token"
-  replication {
-    auto {}
-  }
-}
-
-# 시크릿 버전에 초기값 설정
-resource "google_secret_manager_secret_version" "k8s_token_version" {
-  secret      = google_secret_manager_secret.k8s_token.id
-  secret_data = "dummy-token" # 초기값, 실제 토큰은 마스터 노드에서 생성 후 업데이트
-}
-
 # 인스턴스 템플릿 (워커 노드용)
 resource "google_compute_instance_template" "k8s_worker_template" {
   name_prefix  = "${var.prefix}-worker-template"
   machine_type = var.machine_type
   tags         = [ var.k8s_tag_cluster, var.k8s_tag_worker ]
+
+  depends_on = [ google_compute_instance.k8s_master ]
+
   disk {
     auto_delete  = true
     boot         = true
@@ -60,8 +49,33 @@ resource "google_compute_instance_template" "k8s_worker_template" {
 
   metadata_startup_script = <<-EOF
     #!/bin/bash
-    TOKEN=$(gcloud secrets versions access latest --secret="k8s-join-token")
+
+    # 시스템 업데이트 및 필수 패키지 설치
+    dnf update -y
+    # EPEL 저장소 및 Ansible 설치를 위한 도구들
+    dnf install -y epel-release
+    dnf install -y ansible-core git nmap-ncat
+
+    # Ansible 설정 및 pull (워커 노드 구성)
+    ansible-pull -U https://github.com/JeongHui-seong/GCP-K8s.git -i localhost, -f ansible/worker-setup.yml
+
+    # 마스터 노드 준비 대기 (6443 포트 체크)
     MASTER_IP="${google_compute_instance.k8s_master.network_interface[0].network_ip}"
+    echo "Waiting for master node at $MASTER_IP:6443..."
+
+    for i in {1..30}; do
+      if nc -zv $MASTER_IP 6443 > /dev/null 2>&1; then
+        echo "Master node is ready!"
+        break
+      fi
+      echo "Waiting for master node... ($i/30)"
+      sleep 20
+    done
+
+    # 토큰으로 조인
+    TOKEN=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/k8s-join-token" \
+             -H "Metadata-Flavor: Google")
+
     kubeadm join $MASTER_IP:6443 --token $TOKEN --discovery-token-unsafe-do-not-use-ca-hash
   EOF
 }

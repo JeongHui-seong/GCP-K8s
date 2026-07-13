@@ -26,10 +26,13 @@
     group: "{{ ansible_user }}"
     mode: '0600'
 
-- name: 워커 노드용 조인 토큰 생성 및 GCP Secret Manager 업데이트
+- name: 조인 정보 메타데이터 저장
   ansible.builtin.shell: |
-    TOKEN=$(kubeadm token create)
-    echo "$TOKEN" | gcloud secrets versions add k8s-join-token --data-file=-
+    TOKEN=$(kubeadm token create --ttl 0)
+    HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
+    
+    # GCP 프로젝트 메타데이터에 저장
+    gcloud compute project-info add-metadata --metadata=k8s-join-token=$TOKEN,k8s-ca-hash=$HASH
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
 

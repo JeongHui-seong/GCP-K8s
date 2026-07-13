@@ -1,9 +1,14 @@
-output "k8s_vm_service_account_email" {
-  value       = google_service_account.k8s_vm_sa.email
-  description = "Email of the K8s VM Service Account"
+output "master_vm_sa_email" {
+  value       = google_service_account.master_sa.email
+  description = "Email of the Master Node Service Account"
 }
 
-output "monitoring_vm_service_account_email" {
-  value       = google_service_account.monitoring_vm_sa.email
+output "worker_vm_sa_email" {
+  value       = google_service_account.worker_sa.email
+  description = "Email of the Worker Node Service Account"
+}
+
+output "monitoring_vm_sa_email" {
+  value       = google_service_account.monitoring_sa.email
   description = "Email of the Monitoring VM Service Account"
 }
