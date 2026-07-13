@@ -25,7 +25,7 @@
 
 # K8s 워커 노드 그룹 ID 배출
 output "k8s_workers_group_id" {
-  value       = google_compute_instance_group.k8s_workers.id
+  value       = google_compute_region_instance_group_manager.k8s_workers_mig.instance_group
   description = "로드밸런서가 가져갈 K8s 워커 인스턴스 그룹의 ID"
 }
 

@@ -21,6 +21,12 @@ resource "google_project_iam_member" "master_secret_manager" {
   member  = "serviceAccount:${google_service_account.master_sa.email}"
 }
 
+resource "google_project_iam_member" "master_metadata_editor" {
+  project = var.gcp_project_id
+  role    = "roles/compute.projectMetadataEditor"
+  member  = "serviceAccount:${google_service_account.master_sa.email}"
+}
+
 # CCM 및 노드 자동 관리
 resource "google_project_iam_member" "master_compute_admin" {
   project = var.gcp_project_id

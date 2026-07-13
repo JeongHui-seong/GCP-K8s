@@ -18,7 +18,7 @@ resource "google_compute_instance" "k8s_master" {
     }
 
     service_account {
-        email = data.terraform_remote_state.iam.outputs.k8s_vm_service_account_email
+        email = data.terraform_remote_state.iam.outputs.master_vm_sa_email
         scopes = ["cloud-platform"]
     }
 }
@@ -43,7 +43,7 @@ resource "google_compute_instance_template" "k8s_worker_template" {
   }
 
   service_account {
-    email  = data.terraform_remote_state.iam.outputs.k8s_vm_service_account_email
+    email  = data.terraform_remote_state.iam.outputs.worker_vm_sa_email
     scopes = ["cloud-platform"]
   }
 
@@ -123,7 +123,7 @@ resource "google_compute_instance" "monitoring_vm" {
     }
 
     service_account {
-        email = data.terraform_remote_state.iam.outputs.monitoring_vm_service_account_email
+        email = data.terraform_remote_state.iam.outputs.monitoring_vm_sa_email
         scopes = ["cloud-platform"]
     }
 }
