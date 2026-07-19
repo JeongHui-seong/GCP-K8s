@@ -6,7 +6,7 @@ data "terraform_remote_state" "compute" {
   }
 }
 
-# Cloudflare에 등록할 평생 고정 전면 공인 외부 IP 주소 예약
+# 도메인에 등록할 평생 고정 전면 공인 외부 IP 주소 예약
 resource "google_compute_global_address" "lb_static_ip" {
   name = "${var.prefix}-jhs-domain-static-ip"
 }

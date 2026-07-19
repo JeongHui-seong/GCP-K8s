@@ -1,11 +1,30 @@
 ---
+- name: 워커 노드 조인을 위한 필수 정보 가져오기
+  block:
+    - name: GCP Secret Manager에서 토큰 및 CA 해시 가져오기
+      ansible.builtin.shell: |
+        gcloud secrets versions access latest --secret="k8s-join-token"
+        gcloud secrets versions access latest --secret="k8s-ca-hash"
+      register: k8s_secrets
+      delegate_to: localhost
+      run_once: true
+
+    - name: 마스터 노드 IP 정보 확인 (필요시)
+      ansible.builtin.command: gcloud compute instances describe {{ master_node_name }} --format='get(networkInterfaces[0].networkIP)'
+      register: master_ip
+      delegate_to: localhost
+      run_once: true
+
 - name: 쿠버네티스 클러스터 조인 확인
   ansible.builtin.stat:
     path: /etc/kubernetes/kubelet.conf
   register: kubelet_conf
 
-- name: k8s_master에서 전달받은 토큰 명령어로 클러스터 자동 join
-  ansible.builtin.command: "{{ k8s_join_command }}"
+- name: k8s 클러스터 자동 join 수행
+  ansible.builtin.command: >
+    kubeadm join {{ master_ip.stdout }}:6443 
+    --token {{ k8s_secrets.stdout_lines[0] }} 
+    --discovery-token-ca-cert-hash sha256:{{ k8s_secrets.stdout_lines[1] }}
   when: not kubelet_conf.stat.exists
   register: join_result
   changed_when: "'This node has joined the cluster' in join_result.stdout"

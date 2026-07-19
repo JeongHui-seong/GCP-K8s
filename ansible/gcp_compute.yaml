@@ -1,0 +1,15 @@
+plugin: gcp_compute
+projects:
+  - "k8s-project-499610"
+regions:
+  - "us-central1"
+hostnames:
+  - name
+auth_kind: application
+scopes:
+  - https://www.googleapis.com/auth/cloud-platform
+
+groups:
+  k8s_master: "'k8s-master' in name"
+  k8s_workers: "'k8s-worker' in name"
+  monitoring: "'k8s-monitoring' in name"

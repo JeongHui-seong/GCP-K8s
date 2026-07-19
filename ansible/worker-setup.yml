@@ -1,0 +1,8 @@
+---
+- name: 워커 노드 셀프 설정
+  hosts: localhost
+  connection: local
+  become: true
+  roles:
+    - common
+    - k8s_worker
